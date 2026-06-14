@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#0a0a0a"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Train.Hard"/>
+  <meta name="description" content="Muay Thai & HIIT Fight Timer by Martin Martinez"/>
+  <title>Train.Hard</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <link rel="icon" href="icon-192.png"/>
+  <style>
+    html, body { margin: 0; padding: 0; background: #0a0a0a; }
+    #root { min-height: 100vh; }
+    /* Splash while loading */
+    #splash {
+      position: fixed; inset: 0; background: #0a0a0a;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 9999; transition: opacity .4s;
+    }
+    #splash .s-sub { font-family: sans-serif; font-size: 11px; letter-spacing: 4px; color: #333; text-transform: uppercase; margin-bottom: 6px; }
+    #splash .s-title { font-family: sans-serif; font-size: 32px; font-weight: 900; color: #f0f0f0; letter-spacing: 2px; }
+    #splash .s-title span { color: #e8401a; }
+    #splash .s-dot { width: 6px; height: 6px; border-radius: 50%; background: #e8401a; margin-top: 24px;
+      animation: splashPulse 1s ease-in-out infinite; }
+    @keyframes splashPulse { 0%,100%{opacity:.2;transform:scale(.8)} 50%{opacity:1;transform:scale(1.2)} }
+  </style>
+</head>
+<body>
+  <div id="splash">
+    <div class="s-sub">Fight Timer</div>
+    <div class="s-title">TRAIN<span>.</span>HARD</div>
+    <div class="s-dot"></div>
+  </div>
+  <div id="root"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js" crossorigin></script>
+
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── TRANSLATIONS ─────────────────────────────────────────────────────────────
+const T = {
+  en: {
+    appSub: "FIGHT TIMER", appTitle: "TRAIN",
+    tabMuay: "Muay Thai", tabHiit: "HIIT",
+    cfgRound: "Round Settings", rounds: "Rounds", minPerRound: "Minutes per round",
+    restBetween: "Rest between rounds", minuteBeep: "Minute beep",
+    coachMode: "Coach Mode 🥊", coachCombos: "Coach Combos 🤼", cusDamato: "Cus D'Amato 👊",
+    difficulty: "Difficulty", simple: "Simple", medium: "Medium", advanced: "Advanced", master: "Master",
+    simpleDesc: "Hands only", mediumDesc: "Hands + Kicks", advancedDesc: "+ Knees", masterDesc: "All 8 weapons",
+    start: "▶ START", restart: "↺ RESTART", pause: "⏸ PAUSE", resume: "▶ RESUME", stop: "⏹ STOP",
+    roundLabel: "ROUND", restLabel: "REST", done: "FINISHED", trainingDone: "🏆 TRAINING COMPLETE",
+    coachTitle: "COACH", waiting: "...",
+    cfgHiit: "HIIT Settings", circuitReps: "Circuit repetitions",
+    startHiit: "▶ START HIIT", stopHiit: "⏹ STOP", roundProgress: "ROUND PROGRESS", serie: "SERIE",
+    cardio: "CARDIO", weights: "WEIGHTS", rest: "REST", endOfSerie: "END OF SERIE",
+    hiitInfo3: "40s serie · 10s rest · 60s between rounds", hiitInfo4: "Round 2 reverses the order",
+    ready: "READY?", go: "GO!",
+    cusTitle: "CUS D'AMATO", cusSubtitle: "WILLIE BAG",
+    cusLegend: "The System",
+    cusNumbers: ["Left hook · head","Right hook · head","Left uppercut","Right uppercut","Left hook · body","Right hook · body","Jab · head","Jab · body"],
+    vRound: (n) => `Round ${n}. Fight!`,
+    vRest: "Rest up.",
+    vReady: "Ready?",
+    vGo: "Go!",
+    vEndOfSerie: "End of serie!",
+    vCardio: "Cardio. Let's go!",
+    vWeights: "Weights. Push it!",
+  },
+  es: {
+    appSub: "CRONÓMETRO", appTitle: "ENTRENA",
+    tabMuay: "Muay Thai", tabHiit: "HIIT",
+    cfgRound: "Configuración del Round", rounds: "Rounds", minPerRound: "Minutos por round",
+    restBetween: "Descanso entre rounds", minuteBeep: "Beep por minuto",
+    coachMode: "Coach Modo 🥊", coachCombos: "Coach Combos 🤼", cusDamato: "Cus D'Amato 👊",
+    difficulty: "Dificultad", simple: "Simple", medium: "Medio", advanced: "Avanzado", master: "Master",
+    simpleDesc: "Solo manos", mediumDesc: "Manos + Piernas", advancedDesc: "+ Rodillas", masterDesc: "Los 8 armas",
+    start: "▶ COMENZAR", restart: "↺ REINICIAR", pause: "⏸ PAUSA", resume: "▶ REANUDAR", stop: "⏹ DETENER",
+    roundLabel: "ROUND", restLabel: "DESCANSO", done: "FINALIZADO", trainingDone: "🏆 ENTRENAMIENTO COMPLETO",
+    coachTitle: "COACH", waiting: "...",
+    cfgHiit: "Configuración HIIT", circuitReps: "Repeticiones del circuito",
+    startHiit: "▶ COMENZAR HIIT", stopHiit: "⏹ DETENER", roundProgress: "PROGRESO DEL ROUND", serie: "SERIE",
+    cardio: "CARDIO", weights: "WEIGHTS", rest: "DESCANSO", endOfSerie: "END OF SERIE",
+    hiitInfo3: "40s serie · 10s descanso · 60s entre rounds", hiitInfo4: "Round 2 invierte el orden",
+    ready: "¿LISTO?", go: "¡VAMOS!",
+    cusTitle: "CUS D'AMATO", cusSubtitle: "WILLIE BAG",
+    cusLegend: "El Sistema",
+    cusNumbers: ["Gancho Izq · cabeza","Gancho Der · cabeza","Uppercut Izq","Uppercut Der","Gancho Izq · cuerpo","Gancho Der · cuerpo","Jab · cabeza","Jab · cuerpo"],
+    vRound: (n) => `Round ${n}. ¡Pelea!`,
+    vRest: "Descansa.",
+    vReady: "¿Listo?",
+    vGo: "¡Vamos!",
+    vEndOfSerie: "¡Fin de la serie!",
+    vCardio: "¡Cardio, vamos!",
+    vWeights: "¡Pesas, dale!",
+  },
+};
+
+// ─── COMBO DATABASE ───────────────────────────────────────────────────────────
+const COMBOS = {
+  simple: [
+    { en: "Jab, Cross", es: "Jab, Cruce", strikes: 2 },
+    { en: "Jab, Cross, Hook", es: "Jab, Cruce, Gancho", strikes: 3 },
+    { en: "Jab, Jab, Cross", es: "Jab, Jab, Cruce", strikes: 3 },
+    { en: "Cross, Hook, Cross", es: "Cruce, Gancho, Cruce", strikes: 3 },
+    { en: "Jab, Cross, Hook, Cross", es: "Jab, Cruce, Gancho, Cruce", strikes: 4 },
+    { en: "Hook, Cross", es: "Gancho, Cruce", strikes: 2 },
+    { en: "Jab, Cross, Uppercut", es: "Jab, Cruce, Uppercut", strikes: 3 },
+    { en: "Double Jab, Cross", es: "Doble Jab, Cruce", strikes: 3 },
+    { en: "Cross, Hook, Uppercut", es: "Cruce, Gancho, Uppercut", strikes: 3 },
+    { en: "Jab, Cross, Hook, Uppercut", es: "Jab, Cruce, Gancho, Uppercut", strikes: 4 },
+  ],
+  medium: [
+    { en: "Jab, Cross, Rear Kick", es: "Jab, Cruce, Patada trasera", strikes: 3 },
+    { en: "Jab, Cross, Hook, Low Kick", es: "Jab, Cruce, Gancho, Low kick", strikes: 4 },
+    { en: "Low Kick, Cross, Hook", es: "Low kick, Cruce, Gancho", strikes: 3 },
+    { en: "Teep, Cross, Hook", es: "Teep, Cruce, Gancho", strikes: 3 },
+    { en: "Jab, Cross, Body Kick", es: "Jab, Cruce, Patada al cuerpo", strikes: 3 },
+    { en: "Teep, Rear Roundhouse", es: "Teep, Roundhouse trasero", strikes: 2 },
+    { en: "Low Kick, Jab, Cross, High Kick", es: "Low kick, Jab, Cruce, Patada alta", strikes: 4 },
+    { en: "Jab, Body Kick, Cross", es: "Jab, Patada al cuerpo, Cruce", strikes: 3 },
+    { en: "Cross, Hook, Body Kick", es: "Cruce, Gancho, Patada al cuerpo", strikes: 3 },
+    { en: "Teep, Cross, Hook, Low Kick", es: "Teep, Cruce, Gancho, Low kick", strikes: 4 },
+    { en: "Jab, Cross, Hook, Roundhouse", es: "Jab, Cruce, Gancho, Roundhouse", strikes: 4 },
+  ],
+  advanced: [
+    { en: "Jab, Cross, Lead Knee", es: "Jab, Cruce, Rodilla delantera", strikes: 3 },
+    { en: "Teep, Cross, Rear Knee", es: "Teep, Cruce, Rodilla trasera", strikes: 3 },
+    { en: "Jab, Cross, Hook, Rear Knee", es: "Jab, Cruce, Gancho, Rodilla trasera", strikes: 4 },
+    { en: "Low Kick, Cross, Clinch, Knee", es: "Low kick, Cruce, Clinch, Rodilla", strikes: 4 },
+    { en: "Jab, Cross, Body Kick, Knee", es: "Jab, Cruce, Patada al cuerpo, Rodilla", strikes: 4 },
+    { en: "Teep, Rear Kick, Knee", es: "Teep, Patada trasera, Rodilla", strikes: 3 },
+    { en: "Cross, Hook, Low Kick, Knee", es: "Cruce, Gancho, Low kick, Rodilla", strikes: 4 },
+    { en: "Hook, Cross, Body Kick, Rear Knee", es: "Gancho, Cruce, Patada al cuerpo, Rodilla trasera", strikes: 4 },
+    { en: "Teep, Cross, Hook, Double Knee", es: "Teep, Cruce, Gancho, Doble rodilla", strikes: 5 },
+    { en: "Low Kick, Jab, Cross, High Kick, Knee", es: "Low kick, Jab, Cruce, Patada alta, Rodilla", strikes: 5 },
+  ],
+  master: [
+    { en: "Jab, Cross, Lead Elbow, Rear Knee, Body Kick", es: "Jab, Cruce, Codo delantero, Rodilla trasera, Patada al cuerpo", strikes: 5 },
+    { en: "Jab, Cross, Hook, Rear Elbow", es: "Jab, Cruce, Gancho, Codo trasero", strikes: 4 },
+    { en: "Cross, Hook, Rear Elbow", es: "Cruce, Gancho, Codo trasero", strikes: 3 },
+    { en: "Jab, Lead Elbow, Cross", es: "Jab, Codo delantero, Cruce", strikes: 3 },
+    { en: "Cross, Hook, Low Kick, Lead Elbow", es: "Cruce, Gancho, Low kick, Codo delantero", strikes: 4 },
+    { en: "Teep, Cross, Rear Elbow, Knee", es: "Teep, Cruce, Codo trasero, Rodilla", strikes: 4 },
+    { en: "Jab, Cross, Spinning Elbow", es: "Jab, Cruce, Codo giratorio", strikes: 3 },
+    { en: "Low Kick, Cross, Lead Elbow, Knee", es: "Low kick, Cruce, Codo delantero, Rodilla", strikes: 4 },
+    { en: "Jab, Cross, Hook, Lead Elbow, Rear Knee", es: "Jab, Cruce, Gancho, Codo delantero, Rodilla trasera", strikes: 5 },
+    { en: "Cross, Hook, Body Kick, Elbow, Knee", es: "Cruce, Gancho, Patada al cuerpo, Codo, Rodilla", strikes: 5 },
+    { en: "Low Kick, Cross, Spinning Elbow, Rear Knee", es: "Low kick, Cruce, Codo giratorio, Rodilla trasera", strikes: 4 },
+  ],
+};
+
+// Cus D'Amato Willie Bag sequences — all numbers spoken as a single fast utterance
+const CUS_COMBOS = [
+  { seq: [7, 2],          label: "7 · 2",          desc: { en: "Jab head · Right hook head",       es: "Jab cabeza · Gancho Der cabeza" } },
+  { seq: [7, 2, 1],       label: "7 · 2 · 1",      desc: { en: "Jab · Right hook · Left hook",      es: "Jab · Gancho Der · Gancho Izq" } },
+  { seq: [7, 2, 3],       label: "7 · 2 · 3",      desc: { en: "Jab · Right hook · Left upper",     es: "Jab · Gancho Der · Uppercut Izq" } },
+  { seq: [1, 2],          label: "1 · 2",          desc: { en: "Left hook · Right hook",             es: "Gancho Izq · Gancho Der" } },
+  { seq: [1, 2, 1],       label: "1 · 2 · 1",      desc: { en: "Left · Right · Left hooks",          es: "Gancho Izq · Der · Izq" } },
+  { seq: [5, 2, 1],       label: "5 · 2 · 1",      desc: { en: "Body hook · Right hook · Left hook", es: "Gancho cuerpo · Gancho Der · Izq" } },
+  { seq: [5, 6, 1, 2],    label: "5 · 6 · 1 · 2",  desc: { en: "Body hooks then head hooks",         es: "Ganchos cuerpo luego cabeza" } },
+  { seq: [7, 2, 3, 4],    label: "7 · 2 · 3 · 4",  desc: { en: "Jab · Right hook · L upper · R upper", es: "Jab · Gancho Der · Uppercut Izq · Der" } },
+  { seq: [3, 4],          label: "3 · 4",          desc: { en: "Left upper · Right upper",           es: "Uppercut Izq · Uppercut Der" } },
+  { seq: [3, 2],          label: "3 · 2",          desc: { en: "Left upper · Right hook",            es: "Uppercut Izq · Gancho Der" } },
+  { seq: [7, 5, 2, 1],    label: "7 · 5 · 2 · 1",  desc: { en: "Jab · Body hook · Right · Left",    es: "Jab · Gancho cuerpo · Der · Izq" } },
+  { seq: [8, 3, 2],       label: "8 · 3 · 2",      desc: { en: "Body jab · Left upper · Right hook", es: "Jab cuerpo · Uppercut Izq · Gancho Der" } },
+  { seq: [7, 2, 1, 2],    label: "7 · 2 · 1 · 2",  desc: { en: "Jab · Right · Left · Right",        es: "Jab · Der · Izq · Der" } },
+  { seq: [5, 2, 3],       label: "5 · 2 · 3",      desc: { en: "Body hook · Right hook · Left upper", es: "Gancho cuerpo · Der · Uppercut Izq" } },
+  { seq: [1, 6, 2],       label: "1 · 6 · 2",      desc: { en: "L hook head · R body hook · R hook", es: "Gancho Izq cabeza · Gancho Der cuerpo · Der" } },
+  { seq: [7, 2, 1, 4],    label: "7 · 2 · 1 · 4",  desc: { en: "Jab · Right · Left hook · R upper",  es: "Jab · Gancho Der · Gancho Izq · Uppercut Der" } },
+];
+
+// ─── MICKEY QUOTES ────────────────────────────────────────────────────────────
+const MICKEY_QUOTES = {
+  en: [
+    "You're gonna eat lightning and crap thunder!",
+    "Get up, you son of a bitch! Mickey loves ya!",
+    "You're a warrior. Now fight like one!",
+    "You got heart, kid. Now use it!",
+    "No pain! Come on, no pain!",
+    "What are we waiting for? HIT IT!",
+    "You're a machine. Machines don't get tired!",
+    "You can't stop now. You NEVER stop!",
+    "This is a rough world, kid. Hit harder!",
+    "You're gonna spit nails when I'm done with you!",
+    "Come on! You call that a punch? HARDER!",
+    "Stay hungry. Stay mean. Keep punching!",
+    "I got pain and I got experience. Now you get both!",
+    "Don't think! Your hands know what to do!",
+    "You want it? Then TAKE IT!",
+  ],
+  es: [
+    "¡Vas a comer relámpagos y escupir truenos!",
+    "¡Levántate, que Mickey te quiere!",
+    "¡Eres una máquina, las máquinas no se cansan!",
+    "¡Tienes corazón, ahora úsalo!",
+    "¡Sin dolor! ¡Vamos, sin dolor!",
+    "¡No te detengas, NUNCA te detengas!",
+    "¡Este es un mundo duro, golpea más fuerte!",
+    "¡No pienses, tus manos ya saben qué hacer!",
+    "¡Lo quieres? ¡Entonces TÓMALO!",
+    "¡Eres un guerrero, pelea como uno!",
+    "¡Vamos, eso llamas golpe? ¡MÁS FUERTE!",
+    "¡Mantente hambriento, mantente feroz!",
+    "¡Tengo dolor y tengo experiencia, ahora tienes los dos!",
+    "¡No pares, no pares, no pares!",
+    "¡Eres lo mejor que he entrenado, demuéstralo!",
+  ],
+};
+
+// ─── SPEECH ENGINE ────────────────────────────────────────────────────────────
+// Cus numbers: each digit spoken as individual utterance fired at exact 600ms intervals
+// to perfectly sync with visual animation. NO cancel between numbers.
+function createSpeech(lang) {
+  let voice = null;
+  const langCode = lang === "en" ? "en" : "es";
+
+  const loadVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+    // Prefer deep/male voice for Mickey aggression
+    const preferredEN = ["Google UK English Male","Microsoft David","Daniel","Alex","Fred"];
+    const preferredES = ["Microsoft Pablo","Google español","Diego","Jorge"];
+    const preferred = lang === "en" ? preferredEN : preferredES;
+    voice = voices.find(v => v.lang.startsWith(langCode) && preferred.some(m => v.name.includes(m))) ||
+            voices.find(v => v.lang.startsWith(langCode) && v.localService) ||
+            voices.find(v => v.lang.startsWith(langCode)) ||
+            voices[0];
+  };
+  loadVoice();
+  window.speechSynthesis.onvoiceschanged = loadVoice;
+
+  // Core speak — never cancels existing queue unless told to
+  const speak = (text, rate = 1.0, pitch = 0.75, vol = 1, cancelFirst = true) => {
+    try {
+      loadVoice();
+      if (cancelFirst) window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if (voice) u.voice = voice;
+      u.lang = lang === "en" ? "en-US" : "es-ES";
+      u.rate = rate; u.pitch = pitch; u.volume = vol;
+      window.speechSynthesis.speak(u);
+    } catch(e) {}
+  };
+
+  let cusTimers = [];
+
+  return {
+    // Mickey-style: aggressive, low pitch, fast delivery
+    say: (text) => speak(text, 1.2, 0.72, 1, true),
+
+    // Cus numbers: fire each digit as a SEPARATE utterance at timed intervals
+    // matching exactly the 600ms visual step. Rate very fast (1.8) so each digit
+    // finishes well within its 600ms slot. No cancel between them.
+    sayNumbers: (seq) => {
+      // Cancel any running Cus sequence
+      cusTimers.forEach(clearTimeout);
+      cusTimers = [];
+      window.speechSynthesis.cancel();
+      seq.forEach((n, i) => {
+        const t = setTimeout(() => {
+          try {
+            loadVoice();
+            const u = new SpeechSynthesisUtterance(String(n));
+            if (voice) u.voice = voice;
+            u.lang = lang === "en" ? "en-US" : "es-ES";
+            u.rate = 1.8;   // fast — digit finishes in ~150ms, well inside 600ms window
+            u.pitch = 0.65; // deep and punchy like Cus shouting numbers
+            u.volume = 1;
+            window.speechSynthesis.speak(u);
+          } catch(e) {}
+        }, i * 600); // exact match to visual step
+        cusTimers.push(t);
+      });
+    },
+
+    // Mickey motivational quote — called directly from scheduleMickey with say()
+    cancelCus: () => { cusTimers.forEach(clearTimeout); cusTimers = []; },
+    cancel: () => {
+      cusTimers.forEach(clearTimeout); cusTimers = [];
+      try { window.speechSynthesis.cancel(); } catch(e) {}
+    },
+  };
+}
+
+// ─── AUDIO ────────────────────────────────────────────────────────────────────
+function createAudioEngine() {
+  let ctx = null;
+  const gc = () => { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; };
+  function beep(freq, dur, vol, type = "square", delay = 0) {
+    const c = gc(), osc = c.createOscillator(), gain = c.createGain();
+    osc.connect(gain); gain.connect(c.destination);
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, c.currentTime + delay);
+    gain.gain.linearRampToValueAtTime(vol, c.currentTime + delay + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + delay + dur);
+    osc.start(c.currentTime + delay); osc.stop(c.currentTime + delay + dur + 0.05);
+  }
+  return {
+    bell:       () => { beep(880,.5,.9,"sine"); beep(1100,.3,.6,"sine",.12); },
+    doubleBell: () => { beep(880,.4,.9,"sine"); beep(880,.4,.7,"sine",.55); },
+    // Minute change: 3 descending tones — clearly distinctive, not just a beep
+    minuteChange: () => {
+      beep(1046,.18,.9,"sine",0);
+      beep(880,.18,.85,"sine",.22);
+      beep(698,.35,.9,"sine",.44);
+    },
+    countdown:  () => beep(660,.1,.5,"square"),
+    restStart:  () => { beep(440,.3,.6,"sine"); beep(330,.5,.5,"sine",.2); },
+    endOfSerie: () => [0,.15,.3,.5].forEach((d,i) => beep(i%2===0?880:660,.2,.7,"sine",d)),
+    punch:      (n) => { for(let i=0;i<n;i++) beep(820+i*55,.07,.5,"square",i*.11); },
+    readyBeep:  () => beep(550,.2,.7,"sine"),
+    goBeep:     () => { beep(1100,.4,1,"sine"); beep(1320,.3,.8,"sine",.15); },
+    cusHit:     () => beep(900,.06,.6,"sine"),
+  };
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const fmt = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+// Execute window by difficulty: simple stays snappy, anything with kicks/knees gets extra time
+const execDelay = (strikes, difficulty = "simple") => {
+  const base = difficulty === "simple" ? 2000 : 3200; // simple=2s, rest=3.2s base
+  const perStrike = difficulty === "simple" ? 300 : 500;
+  return base + Math.max(0, strikes - 2) * perStrike;
+};
+// Cus execute window: ~0.55s per punch + gap
+const cusExecDelay = (seq) => seq.length * 550 + 2000;
+
+const SERIE_DUR = 40, REST_DUR = 10, ROUND_REST = 60, SERIES_PER_ROUND = 7;
+
+// ─── CSS ─────────────────────────────────────────────────────────────────────
+const css = `
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700;900&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0a;color:#f0f0f0;font-family:'Barlow Condensed',sans-serif;-webkit-tap-highlight-color:transparent}
+.app{min-height:100vh;display:flex;flex-direction:column;max-width:480px;margin:0 auto}
+.header{padding:16px 16px 0;display:flex;align-items:flex-start;justify-content:space-between}
+.app-sub{font-size:10px;letter-spacing:4px;color:#333;text-transform:uppercase;margin-bottom:2px}
+.app-title{font-size:26px;font-weight:900;letter-spacing:2px}
+.app-title span{color:#e8401a}
+.lang-toggle{display:flex;border:1px solid #1e1e1e;border-radius:2px;overflow:hidden;margin-top:4px}
+.lang-btn{padding:6px 12px;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;border:none;background:#111;color:#444;transition:all .15s}
+.lang-btn.active{background:#e8401a;color:#fff}
+.tabs{display:flex;border-bottom:2px solid #1a1a1a;margin-top:12px}
+.tab{flex:1;padding:14px;text-align:center;font-size:16px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;color:#555;transition:all .2s;border:none;background:none}
+.tab.active{color:#e8401a;border-bottom:3px solid #e8401a;margin-bottom:-2px}
+.content{flex:1;padding:20px 16px}
+.card{background:#111;border:1px solid #1e1e1e;border-radius:4px;padding:20px;margin-bottom:14px}
+.card-title{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#e8401a;margin-bottom:16px;font-weight:600}
+.row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.row:last-child{margin-bottom:0}
+.label{font-size:14px;color:#aaa;letter-spacing:1px}
+.stepper{display:flex;align-items:center;gap:12px}
+.step-btn{width:36px;height:36px;border-radius:2px;border:1px solid #333;background:#1a1a1a;color:#f0f0f0;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.step-btn:hover{border-color:#e8401a;color:#e8401a}
+.step-val{font-family:'Share Tech Mono',monospace;font-size:22px;color:#f0f0f0;min-width:52px;text-align:center}
+.toggle{position:relative;width:44px;height:24px}
+.toggle input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#333;border-radius:24px;cursor:pointer;transition:.2s}
+.slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#888;border-radius:50%;transition:.2s}
+input:checked+.slider{background:#3a1a0a}
+input:checked+.slider::before{transform:translateX(20px);background:#e8401a}
+.diff-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.diff-btn{padding:10px 8px;border:1px solid #2a2a2a;border-radius:2px;background:#0d0d0d;cursor:pointer;text-align:center;transition:all .15s;font-family:'Barlow Condensed',sans-serif}
+.diff-btn:hover{border-color:#444}
+.diff-btn.active{border-color:#e8401a;background:#1a0a08}
+.diff-name{font-size:14px;font-weight:700;letter-spacing:2px;color:#f0f0f0;display:block}
+.diff-desc{font-size:10px;letter-spacing:1px;color:#555;display:block;margin-top:2px}
+.timer-screen{background:#080808;border:1px solid #1e1e1e;border-radius:4px;padding:32px 20px 24px;text-align:center;margin-bottom:14px;position:relative;overflow:hidden}
+.timer-screen::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#e8401a,transparent);opacity:0;transition:opacity .3s}
+.timer-screen.active::before{opacity:1}
+.phase-label{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:#555;margin-bottom:8px;min-height:16px}
+.phase-label.rest{color:#2a6a3a}.phase-label.round{color:#e8401a}
+.big-timer{font-family:'Share Tech Mono',monospace;font-size:88px;line-height:1;color:#f0f0f0;letter-spacing:-2px;transition:color .3s}
+.big-timer.warn{color:#e8401a}
+.round-info{font-size:13px;letter-spacing:3px;color:#444;margin-top:12px;text-transform:uppercase}
+.round-info span{color:#888}
+.ready-overlay{position:absolute;inset:0;background:#080808;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10}
+.ready-text{font-family:'Share Tech Mono',monospace;font-size:28px;color:#aaa;letter-spacing:4px;margin-bottom:10px}
+.ready-count{font-family:'Share Tech Mono',monospace;font-size:100px;color:#e8401a;line-height:1;animation:pulse .5s ease-in-out infinite alternate}
+.go-text{font-family:'Share Tech Mono',monospace;font-size:72px;color:#e8401a;letter-spacing:8px;animation:pop .3s ease-out}
+@keyframes pulse{from{opacity:.6;transform:scale(.97)}to{opacity:1;transform:scale(1.03)}}
+@keyframes pop{from{transform:scale(1.4);opacity:.7}to{transform:scale(1);opacity:1}}
+.coach-box{background:#0d0d0d;border:2px solid #1e1e1e;border-radius:4px;padding:18px 14px;text-align:center;margin-top:14px;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:border-color .3s}
+.coach-box.active{border-color:#e8401a}
+.coach-label{font-size:10px;letter-spacing:3px;color:#444;margin-bottom:8px}
+.combo-text{font-size:20px;font-weight:700;color:#f0f0f0;line-height:1.5;text-align:center}
+.combo-count{font-family:'Share Tech Mono',monospace;font-size:64px;color:#e8401a;line-height:1}
+.coach-waiting{color:#2a2a2a;font-size:18px;letter-spacing:4px}
+/* CUS BOX */
+.cus-box{background:#080808;border:2px solid #1e1e1e;border-radius:4px;padding:18px 14px;margin-top:14px;transition:border-color .3s}
+.cus-box.active{border-color:#c8a020}
+.cus-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.cus-title{font-size:13px;font-weight:900;letter-spacing:3px;color:#c8a020}
+.cus-sub{font-size:9px;letter-spacing:3px;color:#3a3a2a;margin-top:1px}
+.cus-combo-label{font-family:'Share Tech Mono',monospace;font-size:13px;color:#444;letter-spacing:1px}
+.cus-seq-display{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;margin:4px 0 10px}
+.cus-num{font-family:'Share Tech Mono',monospace;font-size:52px;font-weight:900;color:#222;transition:all .25s;min-width:36px;text-align:center;line-height:1}
+.cus-num.lit{color:#c8a020;text-shadow:0 0 24px rgba(200,160,32,.6);transform:scale(1.08)}
+.cus-num.done{color:#2a2a18}
+.cus-desc{font-size:12px;color:#444;letter-spacing:.5px;text-align:center;min-height:16px}
+.cus-waiting{font-size:13px;letter-spacing:3px;color:#222;text-align:center;padding:18px 0}
+/* CUS LEGEND */
+.cus-legend-title{font-size:10px;letter-spacing:3px;color:#333;margin-bottom:8px;text-transform:uppercase}
+.cus-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.cus-entry{display:flex;align-items:center;gap:6px;padding:4px 6px;background:#111;border-radius:2px}
+.cus-num-badge{font-family:'Share Tech Mono',monospace;font-size:14px;color:#c8a020;min-width:12px}
+.cus-entry-text{font-size:11px;color:#3a3a3a;letter-spacing:.3px}
+/* STATUS */
+.status-banner{padding:10px 16px;font-size:11px;letter-spacing:3px;text-transform:uppercase;text-align:center;border-radius:2px;margin-bottom:14px;font-weight:600}
+.status-banner.running{background:#1a0a08;color:#e8401a;border:1px solid #3a1510}
+.status-banner.resting{background:#081a10;color:#2a8a4a;border:1px solid #103a20}
+.status-banner.paused{background:#141408;color:#a0a020;border:1px solid #303010}
+.status-banner.done{background:#0a0a1a;color:#5a5aee;border:1px solid #151550}
+.btn-row{display:flex;gap:10px}
+.btn{flex:1;padding:16px;border:none;border-radius:2px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;transition:all .15s}
+.btn-primary{background:#e8401a;color:#fff}.btn-primary:hover{background:#ff4d20}
+.btn-secondary{background:#1a1a1a;color:#888;border:1px solid #2a2a2a}.btn-secondary:hover{border-color:#444;color:#bbb}
+.btn-danger{background:#1a0808;color:#e84040;border:1px solid #3a1010}.btn-danger:hover{background:#2a0a0a}
+.sep{height:1px;background:#1a1a1a;margin:16px 0}
+/* HIIT */
+.hiit-round-info{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.hiit-round-num{font-size:11px;letter-spacing:3px;color:#555}
+.hiit-round-val{font-size:24px;font-weight:900}
+.serie-name{font-size:44px;font-weight:900;letter-spacing:6px;text-transform:uppercase;margin-bottom:4px}
+.serie-name.cardio{color:#e8401a}.serie-name.weights{color:#4a8fd4}
+.serie-name.rest-serie{color:#2a8a4a}.serie-name.end-serie{color:#c8a020}
+.serie-progress{display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.serie-dot{width:10px;height:10px;border-radius:50%;background:#2a2a2a;transition:all .3s}
+.hiit-info-box{font-size:12px;color:#444;letter-spacing:.5px;line-height:2}
+/* CONFIRM MODAL */
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;display:flex;align-items:center;justify-content:center;padding:24px}
+.confirm-box{background:#111;border:1px solid #3a1510;border-top:3px solid #e8401a;border-radius:4px;padding:28px 24px;max-width:360px;width:100%}
+.confirm-title{font-size:20px;font-weight:700;letter-spacing:1px;color:#f0f0f0;margin-bottom:16px;line-height:1.3}
+.confirm-mickey{font-size:13px;font-style:italic;color:#c8a070;margin-bottom:24px;line-height:1.6;padding:10px 12px;border-left:2px solid #e8401a;background:#0e0806}
+.confirm-btns{display:flex;gap:10px}
+/* HEART RATE WIDGET */
+.hr-widget{display:flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:20px;background:#111;border:1.5px solid #222;cursor:pointer;transition:all .25s;position:relative;user-select:none}
+.hr-widget:hover{border-color:#333}
+.hr-widget.z1{border-color:#9e9e9e;background:#1a1a1a}
+.hr-widget.z2{border-color:#64b5f6;background:#0a1520}
+.hr-widget.z3{border-color:#66bb6a;background:#0a1a0a}
+.hr-widget.z4{border-color:#ffd54f;background:#1a1800}
+.hr-widget.z5{border-color:#ef5350;background:#1a0808}
+.hr-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;letter-spacing:1px;flex-shrink:0;transition:all .4s;position:relative;overflow:hidden}
+.hr-dot.idle{background:#1a1a1a;border:1.5px solid #2a2a2a}
+.hr-dot.z1{background:#757575;border:1.5px solid #9e9e9e}
+.hr-dot.z2{background:#1565c0;border:1.5px solid #64b5f6}
+.hr-dot.z3{background:#2e7d32;border:1.5px solid #66bb6a}
+.hr-dot.z4{background:#f57f17;border:1.5px solid #ffd54f}
+.hr-dot.z5{background:#b71c1c;border:1.5px solid #ef5350;animation:hrPulse .6s ease-in-out infinite}
+@keyframes hrPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.hr-dot-inner{font-family:'Share Tech Mono',monospace;font-size:8px;font-weight:700;color:#fff;text-align:center;line-height:1.1}
+.hr-bpm{font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:#f0f0f0;line-height:1;transition:color .4s}
+.hr-bpm.z1{color:#9e9e9e}.hr-bpm.z2{color:#64b5f6}.hr-bpm.z3{color:#66bb6a}.hr-bpm.z4{color:#ffd54f}.hr-bpm.z5{color:#ef5350}
+.hr-info{display:flex;flex-direction:column}
+.hr-zone-label{font-size:9px;letter-spacing:2px;color:#444;text-transform:uppercase;line-height:1}
+.hr-zone-name{font-size:10px;font-weight:700;letter-spacing:1px;line-height:1.4;transition:color .4s}
+.hr-zone-name.z1{color:#9e9e9e}.hr-zone-name.z2{color:#64b5f6}.hr-zone-name.z3{color:#66bb6a}.hr-zone-name.z4{color:#ffd54f}.hr-zone-name.z5{color:#ef5350}
+.hr-connecting{font-size:9px;color:#555;letter-spacing:1px;animation:blink 1.2s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+/* FOOTER */
+.footer{text-align:center;padding:20px 16px 28px;font-size:10px;letter-spacing:3px;color:#1e1e1e;text-transform:uppercase}
+.footer span{color:#333}
+`;
+
+// ─── POLAR HEART RATE ─────────────────────────────────────────────────────────
+// Zones based on Polar's 5-zone color system (image reference)
+const HR_ZONES = [
+  { zone: "z1", label: "Z1", name: { en: "Very Light", es: "Muy Ligero" }, min: 0,   max: 114, dot: "#757575" },
+  { zone: "z2", label: "Z2", name: { en: "Light",      es: "Ligero" },     min: 114, max: 133, dot: "#1565c0" },
+  { zone: "z3", label: "Z3", name: { en: "Moderate",   es: "Moderado" },   min: 133, max: 152, dot: "#2e7d32" },
+  { zone: "z4", label: "Z4", name: { en: "Hard",       es: "Duro" },       min: 152, max: 171, dot: "#f57f17" },
+  { zone: "z5", label: "Z5", name: { en: "Maximum",    es: "Máximo" },     min: 171, max: 999, dot: "#b71c1c" },
+];
+
+function getZone(bpm) {
+  return HR_ZONES.find(z => bpm >= z.min && bpm < z.max) || HR_ZONES[0];
+}
+
+// GATT Heart Rate Service UUID (standard BT profile — works with Polar Sense)
+const HR_SERVICE_UUID       = "heart_rate";
+const HR_MEASUREMENT_UUID   = "heart_rate_measurement";
+
+function usePolarHR() {
+  const [status, setStatus]   = useState("idle");   // idle | connecting | connected | error
+  const [bpm, setBpm]         = useState(null);
+  const [zone, setZone]       = useState(null);
+  const deviceRef             = useRef(null);
+  const charRef               = useRef(null);
+
+  const onHRNotify = useCallback((event) => {
+    const view = event.target.value;
+    // Byte 0: flags. Bit 0 = 0 means UINT8 format, 1 means UINT16
+    const flags = view.getUint8(0);
+    const hr = (flags & 0x01) ? view.getUint16(1, true) : view.getUint8(1);
+    setBpm(hr);
+    setZone(getZone(hr));
+  }, []);
+
+  const connect = useCallback(async () => {
+    if (!navigator.bluetooth) {
+      setStatus("error");
+      alert("Web Bluetooth not supported. Use Chrome or Edge on Android/Desktop.");
+      return;
+    }
+    try {
+      setStatus("connecting");
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [HR_SERVICE_UUID] }],
+        // Also try by name prefix for Polar devices
+        optionalServices: [HR_SERVICE_UUID],
+      });
+      deviceRef.current = device;
+      device.addEventListener("gattserverdisconnected", () => {
+        setStatus("idle"); setBpm(null); setZone(null);
+      });
+      const server  = await device.gatt.connect();
+      const service = await server.getPrimaryService(HR_SERVICE_UUID);
+      const char    = await service.getCharacteristic(HR_MEASUREMENT_UUID);
+      charRef.current = char;
+      await char.startNotifications();
+      char.addEventListener("characteristicvaluechanged", onHRNotify);
+      setStatus("connected");
+    } catch (e) {
+      if (e.name !== "NotFoundError") setStatus("error");
+      else setStatus("idle");
+    }
+  }, [onHRNotify]);
+
+  const disconnect = useCallback(() => {
+    try {
+      charRef.current?.removeEventListener("characteristicvaluechanged", onHRNotify);
+      deviceRef.current?.gatt?.disconnect();
+    } catch(e) {}
+    setStatus("idle"); setBpm(null); setZone(null);
+  }, [onHRNotify]);
+
+  useEffect(() => () => disconnect(), [disconnect]);
+  return { status, bpm, zone, connect, disconnect };
+}
+
+function HRWidget({ lang }) {
+  const { status, bpm, zone, connect, disconnect } = usePolarHR();
+  const t_zone = zone ? zone.name[lang] : null;
+  const zCls   = zone ? zone.zone : "idle";
+
+  const handleClick = () => {
+    if (status === "connected") disconnect();
+    else connect();
+  };
+
+  return (
+    <div className={`hr-widget ${zCls}`} onClick={handleClick} title={status === "connected" ? "Tap to disconnect" : "Tap to connect Polar"}>
+      <div className={`hr-dot ${zCls}`}>
+        <div className="hr-dot-inner">
+          {status === "connected" && zone ? zone.label : "♥"}
+        </div>
+      </div>
+      <div className="hr-info">
+        {status === "idle" && (
+          <>
+            <div className="hr-zone-label">POLAR</div>
+            <div className="hr-zone-name" style={{color:"#333"}}>{lang==="es"?"Conectar":"Connect"}</div>
+          </>
+        )}
+        {status === "connecting" && (
+          <>
+            <div className="hr-zone-label">POLAR</div>
+            <div className="hr-connecting">{lang==="es"?"buscando...":"searching..."}</div>
+          </>
+        )}
+        {status === "connected" && bpm && (
+          <>
+            <div className={`hr-bpm ${zCls}`}>{bpm}</div>
+            <div className={`hr-zone-name ${zCls}`}>{t_zone}</div>
+          </>
+        )}
+        {status === "connected" && !bpm && (
+          <>
+            <div className="hr-zone-label">POLAR</div>
+            <div className="hr-connecting">--</div>
+          </>
+        )}
+        {status === "error" && (
+          <>
+            <div className="hr-zone-label">POLAR</div>
+            <div className="hr-zone-name" style={{color:"#e84040"}}>ERROR</div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── READY COUNTDOWN HOOK ─────────────────────────────────────────────────────
+function useReadyCountdown(audio, speech, t) {
+  const [readyState, setReadyState] = useState(null);
+  const ivRef = useRef(null);
+  const run = useCallback((onDone) => {
+    let count = 5;
+    setReadyState({ count, showGo: false });
+    audio.readyBeep(); speech.say(t.vReady);
+    clearInterval(ivRef.current);
+    ivRef.current = setInterval(() => {
+      count -= 1;
+      if (count > 0) { setReadyState({ count, showGo: false }); audio.countdown(); }
+      else {
+        clearInterval(ivRef.current);
+        setReadyState({ count: 0, showGo: true });
+        audio.goBeep(); speech.say(t.vGo);
+        setTimeout(() => { setReadyState(null); onDone(); }, 800);
+      }
+    }, 1000);
+  }, [audio, speech, t]);
+  const cancel = useCallback(() => { clearInterval(ivRef.current); setReadyState(null); }, []);
+  return { readyState, run, cancel };
+}
+
+function ReadyOverlay({ readyState, t }) {
+  return (
+    <div className="timer-screen active" style={{ minHeight: 220 }}>
+      <div className="ready-overlay">
+        {readyState.showGo
+          ? <div className="go-text">{t.go}</div>
+          : <><div className="ready-text">{t.ready}</div><div className="ready-count">{readyState.count}</div></>}
+      </div>
+    </div>
+  );
+}
+
+// ─── MUAY THAI ────────────────────────────────────────────────────────────────
+function MuayThaiTab({ audio, lang, onTrainingChange }) {
+  const t = T[lang];
+  const speechRef = useRef(null);
+  useEffect(() => { speechRef.current = createSpeech(lang); }, [lang]);
+
+  const [cfg, setCfg] = useState({
+    rounds: 5, roundMin: 3, restSec: 60,
+    minuteBeep: true, coachMode: false, coachCombo: false, cusDamato: false,
+    difficulty: "simple",
+  });
+  const [state, setState] = useState("idle");
+  const [currentRound, setCurrentRound] = useState(1);
+  const [timeLeft, setTimeLeft] = useState(0);
+  // coach count
+  const [coachCount, setCoachCount] = useState(null);
+  const [coachActive, setCoachActive] = useState(false);
+  // coach combo
+  const [comboState, setComboState] = useState(null);
+  const [comboActive, setComboActive] = useState(false);
+  // cus
+  const [cusCombo, setCusCombo] = useState(null);
+  const [cusLitIdx, setCusLitIdx] = useState(-1);
+  const [cusActive, setCusActive] = useState(false);
+  // quit confirm
+  const [confirmQuit, setConfirmQuit] = useState(false);
+
+  const timerRef = useRef(null);
+  const coachRef = useRef(null);
+  const phaseRef = useRef("round");
+  const timeLeftRef = useRef(0);
+  const roundRef = useRef(1);
+  const pausedRef = useRef(null);
+  const cfgRef = useRef(cfg);
+  useEffect(() => { cfgRef.current = cfg; }, [cfg]);
+
+  const stopAll = useCallback(() => {
+    clearInterval(timerRef.current);
+    clearTimeout(coachRef.current);
+    speechRef.current?.cancel();
+  }, []);
+
+  const { readyState, run: runReady, cancel: cancelReady } = useReadyCountdown(audio, { say: (t) => speechRef.current?.say(t) }, t);
+
+  const upd = (k, v) => setCfg(p => ({ ...p, [k]: v }));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const say = useCallback((text) => speechRef.current?.say(text), []);
+
+  const clearCoachState = useCallback(() => {
+    setCoachCount(null); setCoachActive(false);
+    setComboState(null); setComboActive(false);
+    setCusCombo(null); setCusLitIdx(-1); setCusActive(false);
+  }, []);
+
+  // ── CUS MODE: single utterance for all numbers ──
+  const scheduleCus = useCallback(() => {
+    clearTimeout(coachRef.current);
+    const combo = CUS_COMBOS[Math.floor(Math.random() * CUS_COMBOS.length)];
+
+    // Speak ALL numbers in one call, guaranteed
+    speechRef.current?.sayNumbers(combo.seq);
+
+    // Light up numbers visually in sync (~0.55s per digit for TTS pacing)
+    setCusCombo(combo); setCusLitIdx(0); setCusActive(true);
+    const stepMs = 600;
+
+    const lightNext = (i) => {
+      if (i < combo.seq.length) {
+        setCusLitIdx(i);
+        audio.cusHit();
+        coachRef.current = setTimeout(() => lightNext(i + 1), stepMs);
+      } else {
+        // All lit — wait for user to execute, then reset and schedule next
+        setCusActive(false);
+        const waitMs = cusExecDelay(combo.seq);
+        coachRef.current = setTimeout(() => {
+          setCusCombo(null); setCusLitIdx(-1);
+          const pauseMs = 1000 + Math.random() * 1500;
+          coachRef.current = setTimeout(scheduleCus, pauseMs);
+        }, waitMs);
+      }
+    };
+    lightNext(0);
+  }, [audio]);
+
+  // ── COACH COUNT ──
+  const scheduleCoachCount = useCallback(() => {
+    clearTimeout(coachRef.current);
+    const n = [1,2,3,4,5,6][Math.floor(Math.random()*6)];
+    setCoachCount(n); setCoachActive(true);
+    audio.punch(n); say(String(n));
+    const waitMs = execDelay(n, "simple"); // hands only — snappy
+    coachRef.current = setTimeout(() => {
+      setCoachActive(false); setCoachCount(null);
+      coachRef.current = setTimeout(scheduleCoachCount, 800 + Math.random()*1200);
+    }, waitMs);
+  }, [audio, say]);
+
+  // ── COACH COMBO ──
+  const scheduleCoachCombo = useCallback(() => {
+    clearTimeout(coachRef.current);
+    const pool = COMBOS[cfgRef.current.difficulty];
+    const combo = pool[Math.floor(Math.random() * pool.length)];
+    setComboState(combo); setComboActive(true);
+    say(combo[lang]);
+    const waitMs = execDelay(combo.strikes, cfgRef.current.difficulty);
+    coachRef.current = setTimeout(() => {
+      setComboActive(false); setComboState(null);
+      coachRef.current = setTimeout(scheduleCoachCombo, 1000 + Math.random()*1500);
+    }, waitMs);
+  }, [say, lang]);
+
+  const activeMode = cfg.coachMode ? "count" : cfg.coachCombo ? "combo" : cfg.cusDamato ? "cus" : null;
+
+  const startCoach = useCallback((mode) => {
+    clearTimeout(coachRef.current);
+    const delay = 1200 + Math.random() * 800;
+    coachRef.current = setTimeout(() => {
+      if (mode === "count") scheduleCoachCount();
+      else if (mode === "combo") scheduleCoachCombo();
+      else if (mode === "cus") scheduleCus();
+    }, delay);
+  }, [scheduleCoachCount, scheduleCoachCombo, scheduleCus]);
+
+  const doStartRound = useCallback((round, roundDur) => {
+    phaseRef.current = "round"; roundRef.current = round;
+    setCurrentRound(round); timeLeftRef.current = roundDur; setTimeLeft(roundDur);
+    setState("running"); audio.bell(); say(t.vRound(round));
+    clearCoachState();
+  }, [audio, say, t, clearCoachState]);
+
+  const scheduleRoundTimer = useCallback((round, roundDur, mode) => {
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      timeLeftRef.current -= 1; setTimeLeft(timeLeftRef.current);
+      const c = cfgRef.current;
+      if (c.minuteBeep && timeLeftRef.current > 10 && timeLeftRef.current % 60 === 0) audio.minuteChange();
+      if (timeLeftRef.current <= 10 && timeLeftRef.current > 0) audio.countdown();
+      if (timeLeftRef.current <= 0) {
+        clearInterval(timerRef.current); clearTimeout(coachRef.current); clearCoachState();
+        speechRef.current?.cancelCus();
+        if (round < c.rounds) startRest(round + 1, roundDur, mode);
+        else { audio.doubleBell(); setState("done"); }
+      }
+    }, 1000);
+  }, [audio, clearCoachState]);
+
+  const startRest = useCallback((nextRound, roundDur, mode) => {
+    stopAll(); phaseRef.current = "rest";
+    const restSec = cfgRef.current.restSec;
+    timeLeftRef.current = restSec; setTimeLeft(restSec);
+    setState("resting"); audio.restStart(); say(t.vRest);
+    timerRef.current = setInterval(() => {
+      timeLeftRef.current -= 1; setTimeLeft(timeLeftRef.current);
+      if (timeLeftRef.current === 5) { speechRef.current?.say(t.vReady); }
+      if (timeLeftRef.current <= 5 && timeLeftRef.current > 0) audio.countdown();
+      if (timeLeftRef.current <= 0) {
+        clearInterval(timerRef.current);
+        audio.goBeep(); say(t.vGo);
+        doStartRound(nextRound, roundDur);
+        scheduleRoundTimer(nextRound, roundDur, mode);
+        if (mode) startCoach(mode);
+      }
+    }, 1000);
+  }, [audio, say, t, stopAll, doStartRound, scheduleRoundTimer, startCoach]);
+
+  const handleStart = useCallback(() => {
+    stopAll(); cancelReady();
+    const roundDur = cfg.roundMin * 60;
+    const mode = activeMode;
+    runReady(() => {
+      doStartRound(1, roundDur);
+      scheduleRoundTimer(1, roundDur, mode);
+      if (mode) startCoach(mode);
+    });
+  }, [cfg, activeMode, stopAll, cancelReady, runReady, doStartRound, scheduleRoundTimer, startCoach]);
+
+  const handlePause = useCallback(() => {
+    if (state === "running" || state === "resting") {
+      stopAll();
+      pausedRef.current = { phase: phaseRef.current, time: timeLeftRef.current, round: roundRef.current };
+      setState("paused");
+    } else if (state === "paused") {
+      const { phase, time, round } = pausedRef.current;
+      timeLeftRef.current = time; setTimeLeft(time);
+      const roundDur = cfgRef.current.roundMin * 60;
+      const mode = activeMode;
+      if (phase === "round") {
+        setState("running");
+        scheduleRoundTimer(round, roundDur, mode);
+        if (mode) startCoach(mode);
+      } else {
+        setState("resting");
+        timerRef.current = setInterval(() => {
+          timeLeftRef.current -= 1; setTimeLeft(timeLeftRef.current);
+          if (timeLeftRef.current === 5) speechRef.current?.say(t.vReady);
+          if (timeLeftRef.current <= 5 && timeLeftRef.current > 0) audio.countdown();
+          if (timeLeftRef.current <= 0) {
+            clearInterval(timerRef.current);
+            audio.goBeep(); say(t.vGo);
+            doStartRound(round, roundDur);
+            scheduleRoundTimer(round, roundDur, mode);
+            if (mode) startCoach(mode);
+          }
+        }, 1000);
+      }
+    }
+  }, [state, audio, say, t, stopAll, scheduleRoundTimer, startCoach, doStartRound, activeMode]);
+
+  const handleStop = useCallback(() => {
+    stopAll(); cancelReady(); setState("idle"); setCurrentRound(1); setTimeLeft(0);
+    clearCoachState(); phaseRef.current = "round"; timeLeftRef.current = 0;
+    setConfirmQuit(false);
+  }, [stopAll, cancelReady, clearCoachState]);
+
+  const requestStop = useCallback(() => {
+    // Pause first, then show confirm
+    if (state === "running" || state === "resting") {
+      clearInterval(timerRef.current);
+      clearTimeout(coachRef.current);
+      speechRef.current?.cancel();
+      pausedRef.current = { phase: phaseRef.current, time: timeLeftRef.current, round: roundRef.current };
+      setState("paused");
+    }
+    setConfirmQuit(true);
+  }, [state]);
+
+  useEffect(() => () => stopAll(), [stopAll]);
+  useEffect(() => { onTrainingChange?.(state==="running"||state==="resting"||state==="paused"); }, [state, onTrainingChange]);
+
+  const isActive = state !== "idle" && state !== "done";
+  const isRound = state === "running";
+  const isRest = state === "resting";
+  const warn = isRound && timeLeft <= 10;
+
+  return (
+    <div>
+      {/* CONFIG */}
+      {!isActive && !readyState && state !== "done" && (
+        <div className="card">
+          <div className="card-title">{t.cfgRound}</div>
+          {[
+            { label: t.rounds, key: "rounds", min: 1, max: 20 },
+            { label: t.minPerRound, key: "roundMin", min: 1, max: 10, suffix: "min" },
+            { label: t.restBetween, key: "restSec", min: 10, max: 180, step: 10, suffix: "s" },
+          ].map(({ label, key, min, max, step=1, suffix="" }) => (
+            <div className="row" key={key}>
+              <span className="label">{label}</span>
+              <div className="stepper">
+                <button className="step-btn" onClick={() => upd(key, clamp(cfg[key]-step,min,max))}>−</button>
+                <span className="step-val">{cfg[key]}{suffix}</span>
+                <button className="step-btn" onClick={() => upd(key, clamp(cfg[key]+step,min,max))}>+</button>
+              </div>
+            </div>
+          ))}
+          <div className="sep"/>
+          {[
+            { label: t.minuteBeep, key: "minuteBeep" },
+            { label: t.coachMode, key: "coachMode", excl: ["coachCombo","cusDamato"] },
+            { label: t.coachCombos, key: "coachCombo", excl: ["coachMode","cusDamato"] },
+            { label: t.cusDamato, key: "cusDamato", excl: ["coachMode","coachCombo"] },
+          ].map(({ label, key, excl }) => (
+            <div className="row" key={key} style={{ marginBottom: 12 }}>
+              <span className="label">{label}</span>
+              <label className="toggle">
+                <input type="checkbox" checked={cfg[key]} onChange={e => {
+                  const next = { ...cfg, [key]: e.target.checked };
+                  if (e.target.checked && excl) excl.forEach(k => { next[k] = false; });
+                  setCfg(next);
+                }} />
+                <span className="slider"/>
+              </label>
+            </div>
+          ))}
+          {cfg.coachCombo && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 11, letterSpacing: 3, color: "#555", marginBottom: 10 }}>{t.difficulty.toUpperCase()}</div>
+              <div className="diff-grid">
+                {[["simple",t.simple,t.simpleDesc],["medium",t.medium,t.mediumDesc],["advanced",t.advanced,t.advancedDesc],["master",t.master,t.masterDesc]].map(([k,lbl,desc]) => (
+                  <button key={k} className={`diff-btn ${cfg.difficulty===k?"active":""}`} onClick={() => upd("difficulty",k)}>
+                    <span className="diff-name">{lbl}</span><span className="diff-desc">{desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {cfg.cusDamato && (
+            <div style={{ marginTop: 14 }}>
+              <div className="cus-legend-title">{t.cusLegend}</div>
+              <div className="cus-grid">
+                {t.cusNumbers.map((txt, i) => (
+                  <div key={i} className="cus-entry">
+                    <span className="cus-num-badge">{i+1}</span>
+                    <span className="cus-entry-text">{txt}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {readyState && <ReadyOverlay readyState={readyState} t={t}/>}
+
+      {(isActive || state === "done") && (
+        <>
+          <div className={`status-banner ${state}`}>
+            {state==="running" && `⚡ ${t.roundLabel} ${currentRound}`}
+            {state==="resting" && `💤 ${t.restLabel}`}
+            {state==="paused" && "⏸ PAUSED"}
+            {state==="done" && t.trainingDone}
+          </div>
+          <div className={`timer-screen ${isActive?"active":""}`}>
+            <div className={`phase-label ${isRound?"round":isRest?"rest":""}`}>
+              {isRound?t.roundLabel:isRest?t.restLabel:state==="done"?t.done:""}
+            </div>
+            <div className={`big-timer ${warn?"warn":""}`}>{fmt(timeLeft)}</div>
+            <div className="round-info">{t.roundLabel} <span>{currentRound}</span> / <span>{cfg.rounds}</span></div>
+          </div>
+
+          {/* Coach Count */}
+          {activeMode==="count" && (isRound||state==="paused") && (
+            <div className={`coach-box ${coachActive?"active":""}`}>
+              <div className="coach-label">{t.coachTitle}</div>
+              {coachCount !== null
+                ? <div className="combo-count">{coachCount}</div>
+                : <div className="coach-waiting">{t.waiting}</div>}
+            </div>
+          )}
+
+          {/* Coach Combo */}
+          {activeMode==="combo" && (isRound||state==="paused") && (
+            <div className={`coach-box ${comboActive?"active":""}`}>
+              <div className="coach-label">{t.coachTitle}</div>
+              {comboState
+                ? <div className="combo-text">{comboState[lang]}</div>
+                : <div className="coach-waiting">{t.waiting}</div>}
+            </div>
+          )}
+
+          {/* Cus D'Amato */}
+          {activeMode==="cus" && (isRound||state==="paused") && (
+            <div className={`cus-box ${cusActive?"active":""}`}>
+              <div className="cus-header">
+                <div>
+                  <div className="cus-title">{t.cusTitle}</div>
+                  <div className="cus-sub">{t.cusSubtitle}</div>
+                </div>
+                {cusCombo && <div className="cus-combo-label">{cusCombo.label}</div>}
+              </div>
+              {cusCombo ? (
+                <>
+                  <div className="cus-seq-display">
+                    {cusCombo.seq.map((n, i) => (
+                      <div key={i} className={`cus-num ${cusLitIdx===i?"lit":cusLitIdx>i?"done":""}`}>{n}</div>
+                    ))}
+                  </div>
+                  <div className="cus-desc">{cusCombo.desc[lang]}</div>
+                </>
+              ) : (
+                <div className="cus-waiting">{t.waiting}</div>
+              )}
+            </div>
+          )}
+
+          {/* Mickey motivational quote — shown across all coach modes when active */}
+          {mickeyQuote && isRound && (
+        </>
+      )}
+
+      {/* Quit confirm modal */}
+      {confirmQuit && (
+        <div className="confirm-overlay">
+          <div className="confirm-box">
+            <div className="confirm-title">{lang==="es" ? "¿Estás seguro de abandonar?" : "Are you sure you want to quit?"}</div>
+            <div className="confirm-mickey">"Get up you son of a bitch,<br/>cause Mickey loves you"</div>
+            <div className="confirm-btns">
+              <button className="btn btn-secondary" style={{flex:1}} onClick={() => setConfirmQuit(false)}>
+                {lang==="es" ? "Volver" : "Back"}
+              </button>
+              <button className="btn btn-danger" style={{flex:1}} onClick={handleStop}>
+                {lang==="es" ? "Salir" : "Quit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 14 }}>
+        {state==="idle" && !readyState && (
+          <button className="btn btn-primary" style={{width:"100%"}} onClick={handleStart}>{t.start}</button>
+        )}
+        {state==="done" && (
+          <button className="btn btn-secondary" style={{width:"100%"}} onClick={handleStop}>{t.restart}</button>
+        )}
+        {isActive && (
+          <div className="btn-row">
+            <button className="btn btn-secondary" onClick={handlePause}>{state==="paused"?t.resume:t.pause}</button>
+            <button className="btn btn-danger" onClick={requestStop}>{t.stop}</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── HIIT TAB ─────────────────────────────────────────────────────────────────
+function HiitTab({ audio, lang, onTrainingChange }) {
+  const t = T[lang];
+  const speechRef = useRef(null);
+  useEffect(() => { speechRef.current = createSpeech(lang); }, [lang]);
+  const say = useCallback((text) => speechRef.current?.say(text), []);
+  const stopAll = useCallback(() => { clearInterval(timerRef.current); speechRef.current?.cancel(); }, []);
+
+  const [rounds, setRounds] = useState(3);
+  const [state, setState] = useState("idle");
+  const [currentRound, setCurrentRound] = useState(1);
+  const [currentSerie, setCurrentSerie] = useState(1);
+  const [phase, setPhase] = useState("cardio");
+  const [timeLeft, setTimeLeft] = useState(0);
+  const timerRef = useRef(null);
+  const stateRef = useRef({});
+  const roundsRef = useRef(rounds);
+  useEffect(() => { roundsRef.current = rounds; }, [rounds]);
+
+  const { readyState, run: runReady } = useReadyCountdown(audio, { say }, t);
+  const getSerieType = (round, idx) => ((idx%2===0)===(round%2===1)) ? "cardio" : "weights";
+
+  const runTimer = useCallback((duration, onEnd) => {
+    clearInterval(timerRef.current);
+    stateRef.current.timeLeft = duration; setTimeLeft(duration);
+    timerRef.current = setInterval(() => {
+      stateRef.current.timeLeft -= 1; setTimeLeft(stateRef.current.timeLeft);
+      const tl = stateRef.current.timeLeft;
+      if (tl <= 5 && tl > 0) audio.countdown();
+      if (tl <= 0) { clearInterval(timerRef.current); onEnd(); }
+    }, 1000);
+  }, [audio]);
+
+  const startSerie = useCallback((round, idx) => {
+    const type = getSerieType(round, idx);
+    setCurrentRound(round); setCurrentSerie(idx); setPhase(type); setState("running");
+    audio.bell(); say(type==="cardio" ? t.vCardio : t.vWeights);
+    runTimer(SERIE_DUR, () => {
+      if (idx >= SERIES_PER_ROUND) {
+        setPhase("round-rest"); setState("resting");
+        audio.endOfSerie(); say(t.vEndOfSerie);
+        runTimer(ROUND_REST, () => {
+          const next = round + 1;
+          if (next <= roundsRef.current) runReady(() => startSerie(next, 1));
+          else { setState("done"); audio.doubleBell(); }
+        });
+      } else {
+        setPhase("rest"); setState("resting"); audio.restStart();
+        runTimer(REST_DUR, () => startSerie(round, idx+1));
+      }
+    });
+  }, [audio, say, t, runTimer, runReady]);
+
+  const [confirmQuit, setConfirmQuit] = useState(false);
+  const handleStart = () => { stopAll(); runReady(() => startSerie(1, 1)); };
+  const handleStop = () => { stopAll(); setState("idle"); setCurrentRound(1); setCurrentSerie(1); setPhase("cardio"); setTimeLeft(0); setConfirmQuit(false); };
+  const requestStop = () => { stopAll(); setConfirmQuit(true); };
+  useEffect(() => () => stopAll(), [stopAll]);
+  useEffect(() => { onTrainingChange?.(state==="running"||state==="resting"||state==="paused"); }, [state, onTrainingChange]);
+
+  const isActive = state==="running"||state==="resting";
+  const warn = timeLeft<=5 && (phase==="cardio"||phase==="weights");
+  const phaseNames = { cardio:t.cardio, weights:t.weights, rest:t.rest, "round-rest":t.endOfSerie };
+  const phaseClasses = { cardio:"cardio", weights:"weights", rest:"rest-serie", "round-rest":"end-serie" };
+
+  return (
+    <div>
+      {!isActive && !readyState && state!=="done" && (
+        <div className="card">
+          <div className="card-title">{t.cfgHiit}</div>
+          <div className="row">
+            <span className="label">{t.circuitReps}</span>
+            <div className="stepper">
+              <button className="step-btn" onClick={()=>setRounds(r=>Math.max(1,r-1))}>−</button>
+              <span className="step-val">{rounds}</span>
+              <button className="step-btn" onClick={()=>setRounds(r=>Math.min(10,r+1))}>+</button>
+            </div>
+          </div>
+          <div className="sep"/>
+          <div className="hiit-info-box">
+            <div>📋 <span style={{color:"#555"}}>7 {lang==="es"?"series por round":"series per round"}</span></div>
+            <div>🔥 <span style={{color:"#e8401a"}}>CARDIO</span> <span style={{color:"#333"}}>↔</span> <span style={{color:"#4a8fd4"}}>WEIGHTS</span></div>
+            <div>⏱ <span style={{color:"#444"}}>{t.hiitInfo3}</span></div>
+            <div>🔁 <span style={{color:"#444"}}>{t.hiitInfo4}</span></div>
+          </div>
+        </div>
+      )}
+
+      {readyState && <ReadyOverlay readyState={readyState} t={t}/>}
+
+      {(isActive||state==="done") && (
+        <>
+          <div className="hiit-round-info">
+            <div><div className="hiit-round-num">{t.roundLabel}</div><div className="hiit-round-val">{currentRound} / {rounds}</div></div>
+            <div style={{textAlign:"right"}}><div className="hiit-round-num">{t.serie}</div><div className="hiit-round-val">{phase==="round-rest"?"—":`${currentSerie}/${SERIES_PER_ROUND}`}</div></div>
+          </div>
+          <div className={`timer-screen ${isActive?"active":""}`}>
+            <div className={`phase-label ${phase==="rest"||phase==="round-rest"?"rest":"round"}`}>{phaseNames[phase]}</div>
+            <div className={`big-timer ${warn?"warn":""}`}>{fmt(timeLeft)}</div>
+            <div className={`serie-name ${phaseClasses[phase]}`}>
+              {phase==="cardio"&&`🏃 ${t.cardio}`}
+              {phase==="weights"&&`🏋️ ${t.weights}`}
+              {phase==="rest"&&t.rest}
+              {phase==="round-rest"&&t.endOfSerie}
+            </div>
+          </div>
+          <div className="coach-box">
+            <div className="coach-label">{t.roundProgress}</div>
+            <div className="serie-progress">
+              {Array.from({length:SERIES_PER_ROUND},(_,i)=>{
+                const idx=i+1, st=getSerieType(currentRound,idx);
+                const done=idx<currentSerie, cur=idx===currentSerie&&phase!=="round-rest";
+                return <div key={i} className="serie-dot" style={{
+                  background:cur?"#fff":done?(st==="cardio"?"#e8401a":"#4a8fd4"):"#2a2a2a",
+                  boxShadow:cur?"0 0 8px #e8401a":"none", transform:cur?"scale(1.3)":"scale(1)"
+                }}/>;
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {state==="done" && <div className="status-banner done">{t.trainingDone}</div>}
+
+      {confirmQuit && (
+        <div className="confirm-overlay">
+          <div className="confirm-box">
+            <div className="confirm-title">{lang==="es" ? "¿Estás seguro de abandonar?" : "Are you sure you want to quit?"}</div>
+            <div className="confirm-mickey">"Get up you son of a bitch,<br/>cause Mickey loves you"</div>
+            <div className="confirm-btns">
+              <button className="btn btn-secondary" style={{flex:1}} onClick={() => { setConfirmQuit(false); }}>
+                {lang==="es" ? "Volver" : "Back"}
+              </button>
+              <button className="btn btn-danger" style={{flex:1}} onClick={handleStop}>
+                {lang==="es" ? "Salir" : "Quit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{marginTop:14}}>
+        {state==="idle"&&!readyState&&<button className="btn btn-primary" style={{width:"100%"}} onClick={handleStart}>{t.startHiit}</button>}
+        {state==="done"&&<button className="btn btn-secondary" style={{width:"100%"}} onClick={handleStop}>{t.restart}</button>}
+        {isActive&&<button className="btn btn-danger" style={{width:"100%"}} onClick={requestStop}>{t.stopHiit}</button>}
+      </div>
+    </div>
+  );
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [tab, setTab] = useState("muay");
+  const [lang, setLang] = useState("es");
+  const [navConfirm, setNavConfirm] = useState(null); // {action} pending navigation
+  const [anyTraining, setAnyTraining] = useState(false); // lifted flag from tabs
+  const audioRef = useRef(null);
+  if (!audioRef.current) audioRef.current = createAudioEngine();
+  const t = T[lang];
+
+  const guardedNav = (action) => {
+    if (anyTraining) setNavConfirm({ action });
+    else action();
+  };
+
+  return (
+    <>
+      <style>{css}</style>
+      <div className="app">
+        <div className="header">
+          <div>
+            <div className="app-sub">{t.appSub}</div>
+            <div className="app-title">{t.appTitle}<span>.</span>HARD</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+            <div className="lang-toggle">
+              <button className={`lang-btn ${lang==="es"?"active":""}`} onClick={()=>guardedNav(()=>setLang("es"))}>ES</button>
+              <button className={`lang-btn ${lang==="en"?"active":""}`} onClick={()=>guardedNav(()=>setLang("en"))}>EN</button>
+            </div>
+            <HRWidget lang={lang}/>
+          </div>
+        </div>
+        <div className="tabs">
+          <button className={`tab ${tab==="muay"?"active":""}`} onClick={()=>guardedNav(()=>setTab("muay"))}>{t.tabMuay}</button>
+          <button className={`tab ${tab==="hiit"?"active":""}`} onClick={()=>guardedNav(()=>setTab("hiit"))}>{t.tabHiit}</button>
+        </div>
+        <div className="content">
+          {tab==="muay"
+            ? <MuayThaiTab key={lang} audio={audioRef.current} lang={lang} onTrainingChange={setAnyTraining}/>
+            : <HiitTab key={lang} audio={audioRef.current} lang={lang} onTrainingChange={setAnyTraining}/>}
+        </div>
+        <div className="footer">By <span>Martin Martinez</span></div>
+
+        {navConfirm && (
+          <div className="confirm-overlay">
+            <div className="confirm-box">
+              <div className="confirm-title">{lang==="es" ? "¿Estás seguro de abandonar?" : "Are you sure you want to quit?"}</div>
+              <div className="confirm-mickey">"Get up you son of a bitch,<br/>cause Mickey loves you"</div>
+              <div className="confirm-btns">
+                <button className="btn btn-secondary" style={{flex:1}} onClick={() => setNavConfirm(null)}>
+                  {lang==="es" ? "Volver" : "Back"}
+                </button>
+                <button className="btn btn-danger" style={{flex:1}} onClick={() => { navConfirm.action(); setNavConfirm(null); setAnyTraining(false); }}>
+                  {lang==="es" ? "Salir" : "Quit"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+const rootEl = document.getElementById('root');
+const reactRoot = ReactDOM.createRoot(rootEl);
+reactRoot.render(React.createElement(App));
+if (window.__removeSplash) setTimeout(window.__removeSplash, 300);
+
+  </script>
+
+  <script>
+    // Remove splash once React has painted
+    window.__removeSplash = function() {
+      var s = document.getElementById('splash');
+      if (s) { s.style.opacity = '0'; setTimeout(function(){ s.remove(); }, 400); }
+    };
+
+    // Service Worker for offline / PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('sw.js').catch(function(){});
+      });
+    }
+  </script>
+</body>
+</html>
